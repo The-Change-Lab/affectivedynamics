@@ -23,7 +23,7 @@ If you find the code, models, or data useful, please cite this paper:
 ├── data
 ├── images
 │   ├── OASIS
-│   └──   DayInTheLife
+│   └── DayInTheLife
 ├── figures
 ```
 
