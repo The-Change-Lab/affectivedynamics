@@ -1,47 +1,49 @@
 cff-version: 1.2.0
 message: "If you use this any part of our repository or manuscript, please cite it as below."
-title: "The Affective Dynamics of Everyday Digital Life: Opening Computational Possibility"
-authors:
-- family-names: "Rocklin"
-  given-names: "Maia L."
-  affiliation: Stanford University, Stanford, USA
-- family-names: "Garron Torres"
-  given-names: "Anna Angelina"
-  affiliation: Stanford University, Stanford, USA
-- family-names: "Reeves"
-  given-names: "Byron"
-  affiliation: Stanford University, Stanford, USA
-- family-names: "Robinson"
-  given-names: "Thomas N."
-  affiliation: Stanford University, Stanford, USA
-- family-names: "Ram"
-  given-names: "Nilam"
-  affiliation: Stanford University, Stanford, USA
-keywords:
-- longitudinal
-- intraindividual variability
-- screenomics
-- machine learning
-- software sustainability
-- media effects
-doi: 
-date-released: 
-repository: "https://github.com/The-Change-Lab/affectivedynamics"
-abstract: "Up to now, there was no way to observe and track the affective impacts of the massive
-amount of complex visual stimuli that people encounter “in the wild” during their many
-hours of digital life. In this paper, we propose and illustrate how recent advances in AI –
-trained ensembles of deep neural networks – can be deployed on new data streams
-that are long sequences of screenshots of study participants’ smartphones obtained
-unobtrusively during everyday life. We obtained affective valence and arousal ratings
-of hundreds of images drawn from existing picture repositories often used in
-psychological studies, and a new screenshot repository chronicling individuals’
-everyday digital life from both N = 832 adults and an Affect Computation Model (Parry
-& Vuong, 2021). Results and analysis suggest that (a) our sample rates images
-similarly to other samples used in psychological studies, (b) the Affect Computation
-Model is able to assign valence and arousal ratings similarly to humans, and (c) the
-resulting computational pipeline can be deployed at scale to obtain detailed maps of
-the affective space individuals travel through on their smartphones. Leveraging
-innovative methods for tracking the emotional content individuals encounter on their
-smartphones, we open the possibility for large-scale studies of how the affective
-dynamics of everyday digital life shape individuals’ moment-to-moment experiences
-and well-being."
+preferred-citation:
+  type: article
+  title: "The Affective Dynamics of Everyday Digital Life: Opening Computational Possibility"
+  authors:
+  - family-names: "Rocklin"
+    given-names: "Maia L."
+    affiliation: Stanford University, Stanford, USA
+  - family-names: "Garron Torres"
+    given-names: "Anna Angelina"
+    affiliation: Stanford University, Stanford, USA
+  - family-names: "Reeves"
+    given-names: "Byron"
+    affiliation: Stanford University, Stanford, USA
+  - family-names: "Robinson"
+    given-names: "Thomas N."
+    affiliation: Stanford University, Stanford, USA
+  - family-names: "Ram"
+    given-names: "Nilam"
+    affiliation: Stanford University, Stanford, USA
+  keywords:
+  - longitudinal
+  - intraindividual variability
+  - screenomics
+  - machine learning
+  - software sustainability
+  - media effects
+  doi: 
+  date-released: 
+  repository: "https://github.com/The-Change-Lab/affectivedynamics"
+  abstract: "Up to now, there was no way to observe and track the affective impacts of the massive
+  amount of complex visual stimuli that people encounter “in the wild” during their many
+  hours of digital life. In this paper, we propose and illustrate how recent advances in AI –
+  trained ensembles of deep neural networks – can be deployed on new data streams
+  that are long sequences of screenshots of study participants’ smartphones obtained
+  unobtrusively during everyday life. We obtained affective valence and arousal ratings
+  of hundreds of images drawn from existing picture repositories often used in
+  psychological studies, and a new screenshot repository chronicling individuals’
+  everyday digital life from both N = 832 adults and an Affect Computation Model (Parry
+  & Vuong, 2021). Results and analysis suggest that (a) our sample rates images
+  similarly to other samples used in psychological studies, (b) the Affect Computation
+  Model is able to assign valence and arousal ratings similarly to humans, and (c) the
+  resulting computational pipeline can be deployed at scale to obtain detailed maps of
+  the affective space individuals travel through on their smartphones. Leveraging
+  innovative methods for tracking the emotional content individuals encounter on their
+  smartphones, we open the possibility for large-scale studies of how the affective
+  dynamics of everyday digital life shape individuals’ moment-to-moment experiences
+  and well-being."
