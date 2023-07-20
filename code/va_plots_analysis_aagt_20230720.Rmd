@@ -1,0 +1,840 @@
+---
+title: "Valence & Arousal: Analysis"
+author: "A Garron Torres, Maia Rocklin, Nilam Ram"
+date: '2023-07-20'
+output:    
+  rmdformats::robobook:
+    gallery: TRUE
+    lightbox: TRUE
+editor_options: 
+  chunk_output_fype: console
+  chunk_output_type: console
+---
+
+```{=html}
+<style type="text/css">
+  body, html{
+    font-family: Helvetica;
+}
+.book .book-body .page-inner section.normal h1{
+  font-family: Source Sans Pro;
+  font-weight: bold;
+  color:#8c1515;
+} 
+.book .book-body .page-inner section.normal h2,
+.book .book-body .page-inner section.normal h3, 
+.book .book-body .page-inner section.normal h4{
+  font-family: Source Sans Pro;
+  font-weight: bold;
+}
+
+.book .book-body .page-inner section.normal table  td,
+.book .book-body .page-inner section.normal pre>code.r,
+.book .book-body .page-inner section.normal pre{
+   font-family: Andale Mono;
+}
+
+</style>
+```
+
+# Set-Up
+
+Note, DecTools mascks ICC and SD from the psych package. 
+
+```{r setup, include = T, message=F, warning=F}
+
+#Packages
+library(tidyverse)       # data manipulation
+library(psych)           # data descriptives
+library(DescTools)       # Lin's Correspondance Coefficient
+library(gt)              # table formatting
+library(gtable)          # table formatting
+library(gtsummary)       # table summaries
+library(kableExtra)      # table formatting
+library(knitr)           # html table formatting
+library(irr)             # interrater reliabilities
+library(stringr)         # work with strings
+library(labelled)        # work with labels
+library(lubridate)       # date formatting
+library(viridis)         # color pallets 
+library(plotly)          # 3D plots
+
+#Set gt_theme for summary tables
+theme_gtsummary_compact()
+
+```
+
+## Import Files
+
+[Note on the OASIS file:]{.underline}
+
+The OASIS study (Kurdi et al., 2017), human participants rated the images on a 1-7 likert scale. All subsequent machine and human ratings were done on a 1-9 likert scale.
+
+</p>
+
+The variables are denoted as follows:
+
+-   "actual" OASIS vars (*actual_valence* & *actual_arousal*) were the participant rated OASIS images on a 1-7 scale.
+
+-   "adjusted" OASIS values (*adjusted_valence* & *adjusted_arousal*) are the participant values adjusted to a 1-9 scale.
+
+Kurdi, B., Lozano, S., & Banaji, M. R. (2017). Introducing the Open Affective Standardized Image Set (OASIS). Behavior Research Methods, 49(2), 457–470. https://doi.org/10.3758/s13428-016-0715-3
+
+```{r file import, include=T, message=F, warning=F}
+
+#Human Data
+image_ratings_human_url <- "https://raw.githubusercontent.com/The-Change-Lab/affectivedynamics/main/data/image_ratings_human.csv"
+image_ratings_human <- read.csv(file=url(image_ratings_human_url), header=T)
+
+#All Ratings
+image_ratings_all_url <- "https://raw.githubusercontent.com/The-Change-Lab/affectivedynamics/main/data/image_ratings_all.csv"
+image_ratings_all <- read.csv(file=url(image_ratings_all_url), header=T)
+
+#Day in the Life Deep Affect Modules (DAM)
+image_ratings_DITL_url <- "https://raw.githubusercontent.com/The-Change-Lab/affectivedynamics/main/data/image_ratings_DITL.csv"
+image_ratings_DITL <- read.csv(file=url(image_ratings_DITL_url), header=T)
+
+```
+
+## Reshape & Subset Files
+
+Resphaping and subsetting files for later plotting & analysis.
+
+```{r subset, warning=F, message=F}
+
+#Ratings by source
+image_ratings_smartphone <- image_ratings_all %>%
+  filter(source == "smartphone")
+
+image_ratings_OASIS <- image_ratings_all %>%
+  filter(source == "OASIS")
+
+#Long form valence ratings
+valence_long <- image_ratings_all %>%
+  select(image, valence_human, valence_ml, source) %>%
+  pivot_longer(cols = c("valence_human", "valence_ml"),
+               names_to = "raiter", 
+               values_to = "valence") %>%
+  mutate(raiter = ifelse(raiter == "valence_human", "human", "machine"))
+
+#Long form arousal ratings
+arousal_long <- image_ratings_all %>%
+  select(image, arousal_human, arousal_ml, source) %>%
+  pivot_longer(cols = c("arousal_human", "arousal_ml"),
+               names_to = "raiter", 
+               values_to = "arousal") %>%
+  mutate(raiter = ifelse(raiter == "arousal_human", "human", "machine"))
+
+#Long form ratings
+image_ratings_all_long <- merge(valence_long, arousal_long, by = c("image", "raiter"))
+image_ratings_all_long <- image_ratings_all_long %>%
+  rename(source = source.x) %>%
+  select(image, raiter, source, valence, arousal)
+
+image_ratings_all_extralong <- image_ratings_all %>%
+  select(image, arousal_human, arousal_ml, valence_human, valence_ml, source) %>%
+  pivot_longer(cols = c("valence_human", "valence_ml", "arousal_human", "arousal_ml"),
+               names_to = "raiter", 
+               values_to = "value") %>%
+  mutate(measure = gsub("_.*", "", raiter),
+         raiter = gsub(".*_", "", raiter))
+
+#DITL Label Images
+image_ratings_DITL <- image_ratings_DITL %>%
+  arrange(date) %>%
+  mutate(row_id=row_number())
+
+#DITL Long
+image_ratings_DITL_long <- image_ratings_DITL %>%
+  pivot_longer(cols = c("valence", "arousal"),
+               names_to = "rating")
+
+```
+
+# Data Overview
+
+## Source
+
+```{r source, message=F, warning=F}
+
+#Source
+image_ratings_human %>%
+  mutate(source = as_factor(source)) %>%
+  select(source) %>%
+  tbl_summary(
+    label = list(source ~ "Source"),
+    statistic = list(all_continuous() ~ "{mean} ({min}, {max})"),
+    missing = "ifany") %>%
+  modify_header(label ~ "") %>%
+  as_gt() %>%
+  tab_header("Valence & Arousal Survey Data") 
+
+```
+
+## Demographics
+
+```{r demographics, message=F, warning=F}
+
+#Basic Demographics
+image_ratings_human %>%
+  mutate(gender = factor(gender, 
+                         levels=c(1,2,3,4,5),
+                         labels=c("Male", "Female", "Non-binary", "Other", 
+                                  "Prefer not to answer")),
+         race = factor(race,
+                       levels=c(1,2,3,4,5,6,7),
+                       labels=c("White", "Native American", "Asian", "Black", "Other", 
+                                  "Prefer not to answer", "Multiracial")),
+         hispanic = factor(hispanic,
+                           levels=c(1,2,3),
+                           labels=c("Hispanic or Latino/Latina",
+                                    "Not Hispanic or Latino/Latina",
+                                    "I prefer not to answer"))) %>%
+  select(age, gender, race, hispanic) %>%
+  tbl_summary(
+    label = list(age ~"Age", gender ~ "Gender", race ~ "Race", hispanic ~ "Hispanic"),
+    statistic = list(all_continuous() ~ "{mean} ({min}, {max})"),
+    missing = "ifany") %>%
+  modify_header(label ~ "") %>%
+  as_gt() %>%
+  tab_header("Valence & Arousal Survey Data") 
+
+#Expanded Demographics
+image_ratings_human %>%
+  mutate(education = factor(education,
+                            levels=c(1,2,3,4,5,6,7,8),
+                            labels=c("Less than high school", "Some college",
+                                     "2-year college degree", "4-year college degree",
+                                     "Master's degree", "Doctoral's degree",
+                                     "Professional degree, e.g., JD/MD", 
+                                     "High school/GED/Technical/vocational training)")),
+         marital_status = factor(marital_status,
+                                 levels=c(1,2,3,4),
+                                 labels=c("Married, or living as married",
+                                          "Divorced or separated",
+                                          "Widowed",
+                                          "Single/never married")),
+         smartphone_hours = factor(smartphone_hours,
+                                   levels=c(1,2,3,4,5),
+                                   labels=c("0-1 hours", "1-3 hours",
+                                            "3-5 hours", "5-7 hours",
+                                            "More than 7 hours"))) %>%
+  select(education, marital_status, smartphone_hours) %>%
+  tbl_summary(
+    label = list(education ~ "Education", 
+                 marital_status ~ "Marital Status",
+                 smartphone_hours ~ "Smartphone Hours"),
+    statistic = list(all_continuous() ~ "{mean} ({min}, {max})"),
+    missing = "ifany") %>%
+  modify_header(label ~ "") %>%
+  as_gt() %>%
+  tab_header("Valence & Arousal Survey Data") 
+
+```
+
+## Polific Only Demographics
+
+```{r prolific, warning=F, message=F}
+
+#Prolific Only Demographics
+image_ratings_human %>%
+  filter(source == "prolific") %>%
+  mutate(income = factor(income,
+                         levels=c(1,2,3,4,5,6,7,8,9,10,11,12),
+                         labels=c("$14,999 or less", "$15,000 - $24,999",
+                                  "$25,000 - $29,999","$30,000 - $34,999",
+                                  "$35,000 - $49,999", "$50,000 - $74,999",
+                                  "$75,000 - $99,999", "$100,000 - $149,999",
+                                  "$150,000 - $199,999", "$200,000 or more",
+                                  "Don't know", "I prefer not to answer")),
+         marital_status = factor(marital_status,
+                                 levels=c(1,2,3,4),
+                                 labels=c("Married, or living as married",
+                                          "Divorced or separated",
+                                          "Widowed",
+                                          "Single/never married")),
+         residence = factor(residence,
+                            levels=c(1,2,3),
+                            labels=c("Urban", "Suburban", "Rural")),
+         region = factor(region, 
+                         levels=c(1,2,3,4),
+                         labels=c("Northeast", "South", "West", "Midwest"))) %>%
+  select(marital_status, income, residence, region) %>%
+  tbl_summary(
+    label = list(income ~ "Income",
+                 marital_status ~ "Marital Status",
+                 residence ~ "Residence", region ~ "Region"),
+    statistic = list(all_continuous() ~ "{mean} ({min}, {max})"),
+    missing = "ifany") %>%
+  modify_header(label ~ "") %>%
+  as_gt() %>%
+  tab_header("Valence & Arousal Survey Data") 
+
+```
+
+## Location
+
+```{r location, warning=F, message=F}
+
+#All students were attending suburban, west coast institutions
+image_ratings_human <- image_ratings_human %>%
+  mutate(residence_all = ifelse(source == "prolific", residence, 2),
+         region_all = ifelse(source == "prolific", region, 3))
+
+#Label factor levels
+residence_relabel <- function(orig_data){
+  val_labels(orig_data) <- 
+    c("Urban" = 1, 
+      "Suburban" = 2,
+      "Rural" = 3
+      ) 
+  return(orig_data)
+}
+
+region_relabel <- function(orig_data){
+  val_labels(orig_data) <- 
+    c("Northeast" = 1, 
+      "South" = 2,
+      "West" = 3,
+      "Midwest" = 4
+      ) 
+  return(orig_data)
+}
+
+image_ratings_human$residence_all <- residence_relabel(image_ratings_human$residence_all)
+image_ratings_human$region_all <- region_relabel(image_ratings_human$region_all)
+
+#Look at location summary
+image_ratings_human %>%
+  mutate(residence_all = as_factor(residence_all),
+         region_all = as_factor(region_all)) %>%
+  select(residence_all, region_all) %>%
+  tbl_summary(
+    label = list(residence_all ~ "Residence", region_all ~ "Region"),
+    statistic = list(all_continuous() ~ "{mean} ({min}, {max})"),
+    missing = "ifany") %>%
+  modify_header(label ~ "") %>%
+  as_gt() %>%
+  tab_header("Valence & Arousal Survey Data") 
+  
+```
+
+# Valence & Arousal Plots
+
+## Valence Plots
+
+```{r valence plots, warning=F, message=F}
+
+#Valence Ratings
+image_ratings_all %>%
+  ggplot(aes(x = valence_human, y = valence_ml)) +
+  geom_smooth(method = "lm", se = T, colour = "grey", linewidth = 0.5, alpha = 0.5) +
+  geom_point(colour = "blue") +
+  ggtitle("Valence") +
+  scale_x_continuous("Human Ratings", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("ML Ratings", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) 
+
+image_ratings_all %>%
+  ggplot(aes(x = valence_human, y = valence_ml, color = source)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  ggtitle("Valence") +
+  scale_x_continuous("Human Ratings", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("Machine Ratings", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) 
+
+```
+
+## Arousal Plots
+
+```{r arousal plots, warning=F, message=F}
+
+#Arousal Ratings
+image_ratings_all %>%
+  ggplot(aes(x = arousal_human, y = arousal_ml)) +
+  geom_smooth(method = "lm", se = T, colour = "grey", linewidth = 0.5, alpha = 0.5) +
+  geom_point(colour = "red") +
+  ggtitle("Arousal") +
+  scale_x_continuous("Human Ratings", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("Machine Ratings", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+image_ratings_all %>%
+  ggplot(aes(x = arousal_human, y = arousal_ml, color = source)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  ggtitle("Arousal") +
+  scale_x_continuous("Human Ratings", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("Machine Ratings", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+```
+
+## Comparing Valence & Arousal
+
+```{r valence vs arousal, warning=F, message=F}
+
+#All by Rater
+image_ratings_all_long %>%
+  group_by(image) %>%
+  ggplot(aes(x = arousal, y = valence, color = raiter)) +
+  geom_point() +
+  geom_line(aes(group = image), color="grey") +
+  ggtitle("Valence and Arousal by Raiter") +
+  scale_x_continuous("Arousal", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("Valence", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+image_ratings_all_long %>%
+  group_by(image) %>%
+  ggplot(aes(x = arousal, y = valence, color = raiter)) +
+  geom_point() +
+  geom_line(aes(group = image), color="grey") +
+  ggtitle("Valence and Arousal by Raiter") +
+  scale_x_continuous("Arousal", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("Valence", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  facet_wrap(~source)
+
+```
+
+## By Image Source
+
+```{r plots source, warning=F, message=F}
+
+#Arousal
+image_ratings_all %>%
+  group_by(source) %>%
+  ggplot(aes(x = arousal_human, y = arousal_ml)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  ggtitle("Arousal") +
+  scale_x_continuous("Human Ratings", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("Machine Ratings", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  facet_wrap(~source)
+
+#Valence
+image_ratings_all %>%
+  group_by(source) %>%
+  ggplot(aes(x = valence_human, y = valence_ml)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  ggtitle("Valence") +
+  scale_x_continuous("Human Ratings", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("Machine Ratings", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  facet_wrap(~source)
+
+#Valence and Arousal
+image_ratings_all_long %>%
+  group_by(source) %>%
+  ggplot(aes(x = arousal, y = valence)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  ggtitle("Rating by Source and Raiter") +
+  scale_x_continuous("Arousal", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("Valence", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  facet_wrap(~source + raiter)
+
+```
+
+## Av Participant Rating Across Images
+
+Plot showing average participant ratings on valence and arousal across all images.
+
+```{r av participant, warning=F, message=F}
+
+#Valence
+image_ratings_all %>%
+  group_by(source) %>%
+  ggplot() +
+  geom_point(mapping = aes(x = reorder(image, valence_human), 
+                           y = valence_human, color = source)) +
+  ggtitle("Average Participant Valence Ratings Across Images") +
+  xlab("Image") +
+  scale_y_continuous("Valence", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+#Arousal
+image_ratings_all %>%
+  group_by(source) %>%
+  ggplot() +
+  geom_point(mapping = aes(x = reorder(image, arousal_human), 
+                           y = arousal_human, color = source)) +
+  ggtitle("Average Participant Arousal Ratings Across Images") +
+  xlab("Image") +
+  scale_y_continuous("Arousal", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+#Faceted
+image_ratings_all_extralong %>%
+  group_by(source) %>%
+  ggplot() +
+  geom_point(mapping = aes(x = reorder(image, value), 
+                           y = value, color = source)) +
+  ggtitle("Average Participant Ratings Across Images") +
+  xlab("Image") +
+  scale_y_continuous("Rating", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  facet_wrap(~measure)
+
+```
+
+## Smartphone with Elipses
+
+```{r smartphone elipses, warning=F, message=F}
+
+#All by Rater
+image_ratings_all_long %>%
+  filter(source == "smartphone") %>%
+  mutate(Raiter = ifelse(raiter == "human", "Human", "Machine")) %>%
+  group_by(image) %>%
+  ggplot(aes(x = arousal, y = valence, color = Raiter)) +
+  geom_point(linewidth = 1.5) +
+  scale_colour_manual("Ratings", values =
+                        c("Human"="#1f77b4", "Machine"="#ff7f0e")) +
+  stat_ellipse(linewidth = 1) +
+  geom_line(aes(group = image), color="black", size = 0.2) +
+  ggtitle("Valence and Arousal:\nSmartphone Images\n") +
+  scale_x_continuous("Arousal", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("Valence", limits = c(1,9), n.breaks = 9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        text = element_text(size = 16))
+
+```
+
+## Triangle Plot: OASIS
+
+Plot displaying distance between participant, ML, and previous OASIS ratings on OASIS images.
+
+```{r triangle OASIS, warning=F, message=F}
+
+image_ratings_all %>%
+  filter(source=="OASIS")%>%
+  ggplot() +
+  geom_point(mapping = aes(x = arousal_human, y = valence_human, 
+                           colour = "Human"), size = 2) +
+  stat_ellipse(mapping = aes(x = arousal_human, y = valence_human, 
+                           colour = "Participant"), size = 1) +
+  geom_point(mapping = aes(x = arousal_ml, y = valence_ml, 
+                           colour = "Human"), size = 2) +
+  stat_ellipse(mapping = aes(x = arousal_ml, y = valence_ml, 
+                           colour = "Machine"),  size = 1) +
+  geom_point(mapping = aes(x = adjusted_arousal, y = adjusted_valence, 
+                           colour = "Prior OASIS"), size = 2) + 
+  stat_ellipse(mapping = aes(x = adjusted_arousal, y = adjusted_valence, 
+                           colour = "Prior OASIS"), size = 1) + 
+  scale_colour_manual("Ratings", values = 
+                        c("Human"="#1f77b4", 
+                          "Machine"="#ff7f0e", 
+                          "Prior OASIS"="#2ca02c")) +
+  geom_segment(aes(x = arousal_human, y = valence_human, 
+                   xend= arousal_ml, yend = valence_ml), 
+               linetype = 1, size = 0.5, color ="black") +
+  geom_segment(aes(x = arousal_ml, y = valence_ml,
+                   xend = adjusted_arousal, yend = adjusted_valence), 
+               linetype = 1, size = 0.5, color ="black") +
+  geom_segment(aes(x = adjusted_arousal, y = adjusted_valence,
+                   xend= arousal_human, yend = valence_human), 
+               linetype = 1, size = 0.5, color ="black") +
+  scale_x_continuous("Arousal", limits = c(1,9), n.breaks = 9) +
+  scale_y_continuous("Valence", limits = c(-1,10), n.breaks = 11) +
+  ggtitle("Participant, ML, and Previous \nOASIS Rating Relationships") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        text = element_text(size = 16))
+
+```
+
+# Valence & Arousal Data
+
+## Data Overview
+
+```{r human do, warning=F, message=F}
+
+glimpse(image_ratings_human)
+
+kbl(describe(image_ratings_human[,c(20:219)])) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), 
+                full_width = F,
+                fixed_thead = F)
+
+#Stats
+image_ratings_all %>%
+  select(valence_human, valence_ml, adjusted_valence) %>%
+  tbl_summary(
+    label = list(valence_human ~"Human", valence_ml ~ "Machine", adjusted_valence ~ "OASIS Adjusted"),
+    statistic = list(all_continuous() ~ "{min}-{max} ({mean}, {SD})"),
+    missing = "ifany") %>%
+  modify_header(label ~ "") %>%
+  as_gt() %>%
+  tab_header("Valence") 
+
+image_ratings_all %>%
+  select(arousal_human, arousal_ml, adjusted_arousal) %>%
+  tbl_summary(label = list(arousal_human ~"Human", arousal_ml ~ "Machine", 
+                           adjusted_arousal ~ "OASIS Adjusted"),
+    statistic = list(all_continuous() ~ "{min}-{max} ({mean}, {SD})"),
+    missing = "ifany") %>%
+  modify_header(label ~ "") %>%
+  as_gt() %>%
+  tab_header("Arousal") 
+
+#Stats by Source
+image_ratings_all %>%
+  select(source, valence_human, valence_ml) %>%
+  tbl_summary(by = source, 
+              label = list(valence_human ~"Human", valence_ml ~ "Machine"),
+              statistic = list(all_continuous() ~ "{min}-{max} ({mean}, {SD})"),
+              missing = "ifany") %>%
+  modify_header(label ~ "") %>%
+  as_gt() %>%
+  tab_header("Valence") 
+
+image_ratings_all %>%
+  select(source, arousal_human, arousal_ml) %>%
+  tbl_summary(by = source, 
+              label = list(arousal_human ~"Human", arousal_ml ~ "Machine"),
+              statistic = list(all_continuous() ~ "{min}-{max} ({mean}, {SD})"),
+              missing = "ifany") %>%
+  modify_header(label ~ "") %>%
+  as_gt() %>%
+  tab_header("Arousal") 
+
+```
+
+## Correlation Tests
+
+Let's look at the correlation between the machine and human ratings for the 100 images.
+
+```{r corr all images, warning=F, message=F}
+
+# All Images
+cor.test(image_ratings_all$valence_human, image_ratings_all$valence_ml)
+
+cor.test(image_ratings_all$arousal_human, image_ratings_all$arousal_ml)
+
+# Smartphone Only
+cor.test(image_ratings_smartphone$valence_human, image_ratings_smartphone$valence_ml)
+
+cor.test(image_ratings_smartphone$arousal_human, image_ratings_smartphone$arousal_ml)
+
+cor.test(image_ratings_smartphone$arousal_human,image_ratings_smartphone$valence_human)
+
+cor.test(image_ratings_smartphone$arousal_ml, image_ratings_smartphone$valence_ml)
+
+# OASIS Only
+cor.test(image_ratings_OASIS$valence_human, image_ratings_OASIS$valence_ml)
+
+cor.test(image_ratings_OASIS$arousal_human, image_ratings_OASIS$arousal_ml)
+
+cor.test(image_ratings_OASIS$arousal_human, image_ratings_OASIS$valence_human)
+
+cor.test(image_ratings_OASIS$arousal_ml, image_ratings_OASIS$valence_ml)
+
+#Adjusted Arousal vs Machine Arousal
+cor.test(image_ratings_OASIS$adjusted_arousal, image_ratings_OASIS$arousal_ml)
+
+#Adjusted Valence vs Machine Valence
+cor.test(image_ratings_OASIS$adjusted_valence, image_ratings_OASIS$valence_ml)
+
+#Adjusted Arousal vs Human 
+cor.test(image_ratings_OASIS$adjusted_arousal, image_ratings_OASIS$arousal_human)
+
+#Adjusted Valence vs Human
+cor.test(image_ratings_OASIS$adjusted_valence, image_ratings_OASIS$valence_human)
+
+```
+
+## ICC
+
+```{r ICC, message=F, warning=F}
+
+#All Images Valence ICC
+psych::ICC(image_ratings_all[,c("valence_human","valence_ml")])
+
+#All Images Arousal ICC
+psych::ICC(image_ratings_all[,c("arousal_human","arousal_ml")])
+
+#Smartphone Valence ICC
+psych::ICC(image_ratings_smartphone[,c("valence_human","valence_ml")])
+
+#Smartphone Arousal ICC
+psych::ICC(image_ratings_smartphone[,c("arousal_human","arousal_ml")])
+
+#OASIS Valence ICC
+psych::ICC(image_ratings_OASIS[,c("valence_human","valence_ml")])
+
+#OASIS Arousal ICC
+psych::ICC(image_ratings_OASIS[,c("arousal_human","arousal_ml")])
+
+#OASIS Human Valence ICC
+psych::ICC(image_ratings_OASIS[,c("valence_human", "adjusted_valence")])
+
+#OASIS Human Arousal ICC
+psych::ICC(image_ratings_OASIS[,c("arousal_human", "adjusted_arousal")])
+
+```
+
+## Lin's Correspondance Coefficient
+
+```{r lin cc, warning=T, message=F}
+
+#All Images Valence ICC
+CCC(image_ratings_all$valence_human, image_ratings_all$valence_ml, 
+    ci = "z-transform", conf.level = 0.95, na.rm = FALSE)
+
+#All Images Arousal ICC
+CCC(image_ratings_all$arousal_human, image_ratings_all$arousal_ml, 
+    ci = "z-transform", conf.level = 0.95, na.rm = FALSE)
+
+#Smartphone Valence ICC
+CCC(image_ratings_smartphone$valence_human, image_ratings_smartphone$valence_ml, 
+    ci = "z-transform", conf.level = 0.95, na.rm = FALSE)
+
+#Smartphone Arousal ICC
+CCC(image_ratings_smartphone$arousal_human, image_ratings_smartphone$arousal_ml, 
+    ci = "z-transform", conf.level = 0.95, na.rm = FALSE)
+
+#OASIS Valence ICC
+CCC(image_ratings_OASIS$valence_human, image_ratings_OASIS$valence_ml, 
+    ci = "z-transform", conf.level = 0.95, na.rm = FALSE)
+
+#OASIS Arousal ICC
+CCC(image_ratings_OASIS$arousal_human, image_ratings_OASIS$arousal_ml, 
+    ci = "z-transform", conf.level = 0.95, na.rm = FALSE)
+
+#OASIS Human Valence ICC
+CCC(image_ratings_OASIS$valence_human, image_ratings_OASIS$adjusted_valence, 
+    ci = "z-transform", conf.level = 0.95, na.rm = FALSE)
+
+#OASIS Human Arousal ICC
+CCC(image_ratings_OASIS$arousal_human, image_ratings_OASIS$adjusted_arousal, 
+    ci = "z-transform", conf.level = 0.95, na.rm = FALSE)
+
+```
+
+## Means and SDs
+
+```{r means SD, warning=F, message=F, echo=F}
+
+#All Images
+meanSD_rows_all <- c("Human" ,"Machine", "OASIS Adjusted", "Human" ,"Machine", "OASIS Adjusted")
+mean_col_all <- c(mean(image_ratings_all$arousal_human), mean(image_ratings_all$arousal_ml), 
+                  mean(image_ratings_all$adjusted_arousal, na.rm = TRUE),
+                  mean(image_ratings_all$valence_human), mean(image_ratings_all$valence_ml), 
+                  mean(image_ratings_all$adjusted_valence, na.rm = TRUE))
+SD_col_all <- c(psych::SD(image_ratings_all$arousal_human), psych::SD(image_ratings_all$arousal_ml), 
+                psych::SD(image_ratings_all$adjusted_arousal, na.rm = TRUE),
+                psych::SD(image_ratings_all$valence_human), psych::SD(image_ratings_all$valence_ml), 
+                psych::SD(image_ratings_all$adjusted_valence, na.rm = TRUE))
+
+meanSD_table_all <- data.frame(meanSD_rows_all, mean_col_all, SD_col_all)
+
+meanSD_table_all <- meanSD_table_all %>%
+  rename(Raiting = meanSD_rows_all,
+         Mean = mean_col_all,
+         SD = SD_col_all)
+
+kbl(meanSD_table_all, caption = "All Images") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+  pack_rows("Arousal", 1, 3) %>%
+  pack_rows("Valence", 4, 6)
+
+#By Source
+meanSD_rows_bySource <- c("OASIS Human","OASIS Machine", "Smartphone Human" ,"Smartphone Machine",
+                          "OASIS Human","OASIS Machine", "Smartphone Human" ,"Smartphone Machine")
+mean_col_bySource <- c(mean(image_ratings_OASIS$arousal_human), 
+                       mean(image_ratings_OASIS$arousal_ml), 
+                       mean(image_ratings_smartphone$arousal_human), 
+                       mean(image_ratings_smartphone$arousal_ml), 
+                       mean(image_ratings_OASIS$valence_human), 
+                       mean(image_ratings_OASIS$valence_ml), 
+                       mean(image_ratings_smartphone$valence_human), 
+                       mean(image_ratings_smartphone$valence_ml))
+SD_col_bySource <- c(psych::SD(image_ratings_OASIS$arousal_human), 
+                     psych::SD(image_ratings_OASIS$arousal_ml), 
+                     psych::SD(image_ratings_smartphone$arousal_human), 
+                     psych::SD(image_ratings_smartphone$arousal_ml), 
+                     psych::SD(image_ratings_OASIS$valence_human), 
+                     psych::SD(image_ratings_OASIS$valence_ml), 
+                     psych::SD(image_ratings_smartphone$valence_human), 
+                     psych::SD(image_ratings_smartphone$valence_ml))
+
+meanSD_table_bySource <- data.frame(meanSD_rows_bySource, mean_col_bySource, SD_col_bySource)
+
+meanSD_table_bySource <- meanSD_table_bySource %>%
+  rename(Raiting = meanSD_rows_bySource,
+         Mean = mean_col_bySource,
+         SD = SD_col_bySource)
+
+kbl(meanSD_table_bySource, caption = "By Images Source") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+  pack_rows("Arousal", 1, 4) %>%
+  pack_rows("Valence", 5, 8)
+
+```
+
+# Day In the Life Deep Affect Module
+
+## Data Overview
+
+```{r DAM data, warning=F, message=F}
+
+glimpse(image_ratings_DITL)
+
+kbl(describe(image_ratings_DITL[,c(2,3:4)])) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+## Plots
+
+```{r DAM plots, warning=F, message=F}
+
+#By Order
+image_ratings_DITL_long %>%
+  ggplot(aes(x = row_id, y = value, col = rating)) +
+  geom_point(aes(color = rating)) +
+  geom_line(aes(color = rating)) +
+  ggtitle("Deep Affect Module: By Order") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+#By Order with subset highlighted
+image_ratings_DITL %>%
+  ggplot(aes(x=row_id)) +
+  geom_rect(xmin = 375, xmax = 1000, ymin = 0, ymax= 7, 
+            fill = "grey90", alpha = 0.03) +
+  geom_line(aes(y=valence), color = "blue", alpha = 0.5) +
+  geom_line(aes(y=arousal), color = "red", alpha = 0.75) +
+  ggtitle("Deep Affect Module: By Order") +
+  scale_y_continuous(name = "Score") +
+  scale_x_continuous(name = "Screenshot", n.breaks = 10) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        text = element_text(size = 16))
+
+```
