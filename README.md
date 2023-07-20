@@ -19,12 +19,10 @@ If you find the code, models, or data useful, please cite this paper:
 ```
 .
 ├── code
-│   ├── R
 ├── data
 ├── images
 │   ├── OASIS
 │   └── DayInTheLife
-├── figures
 ```
 
 
