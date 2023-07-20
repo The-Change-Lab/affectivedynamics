@@ -44,6 +44,6 @@ If you find the code, models, or data useful, please cite this paper:
 
 You can also get the citation from the .cff file.
 
-OASIS images and ratings from: 
+OASIS images from: 
 
 Kurdi, B., Lozano, S., & Banaji, M. R. (2017). Introducing the Open Affective Standardized Image Set (OASIS). Behavior Research Methods, 49(2), 457–470. https://doi.org/10.3758/s13428-016-0715-3
